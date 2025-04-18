@@ -3,7 +3,7 @@
 #'
 #' @export
 runTakuzuApp <- function() {
-  appFile <- system.file("takuzu_app.R", package = "TakuzuKL")
+  appFile <- system.file("app.R", package = "TakuzuKL")
   if (appFile == "") {
     stop("Could not find the Shiny app file. Try re-installing the package.", call. = FALSE)
   }
