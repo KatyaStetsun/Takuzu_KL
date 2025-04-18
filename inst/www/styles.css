@@ -242,10 +242,3 @@ body {
   width: 200px;
   margin-bottom: 95px !important;
 }
-
-.error-msg {
-  color: #ff6b6b;
-  font-size: 14px;
-  text-align: center;
-  margin-top: 5px;
-}

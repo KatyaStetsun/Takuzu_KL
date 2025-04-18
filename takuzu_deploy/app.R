@@ -1,9 +1,13 @@
+options(shiny.maxRequestSize = 50 * 1024^2)
+options(shiny.port = 8787)
+
 library(shiny)
 library(shinyjs)
-library(TakuzuKL)
 library(readr)
 
-# Valid grids via zzz.R:
+source("R/dl_csv.R")
+source("R/hide_by_difficulty.R")
+
 grids <- dl_csv()
 
 ui <- fluidPage(
@@ -14,20 +18,6 @@ ui <- fluidPage(
   uiOutput("rules_ui"),
   uiOutput("game_ui"),
   uiOutput("victory_ui")
-#  ,
-
-#  tags$audio(
-#    id = "audio_menu", src = "https://drive.google.com/uc?export=view&id=15r-mJwuaFsTVLnFfZ63aDmOy2gdq_n_W&confirm=t",
-#    type = "audio/mp3",onerror = "console.log('Audio load error')",autoplay = FALSE,controls = FALSE),
-#  tags$audio(id = "audio_victory",src = "https://drive.google.com/uc?export=view&id=1trcYnu0YkKpMPE2ptE0TAZ0LrT8amVJV&confirm=t",
-#    type = "audio/mp3",onerror = "console.log('Audio load error')",autoplay = FALSE,controls = FALSE),
-#  tags$audio(id = "audio_level_easy",src = "https://drive.google.com/uc?export=view&id=1FKtr1o7dZsRAPg-VOTbiV6xnQbtsW_M8&confirm=t",
-#    type = "audio/mp3",onerror = "console.log('Audio load error')",autoplay = FALSE,controls = FALSE),
-#  tags$audio(id = "audio_level_medium",src = "https://drive.google.com/uc?export=view&id=1eyttmlLsJidM49HifZWZlx36Cj4IedMR&confirm=t",
-#    type = "audio/mp3",onerror = "console.log('Audio load error')",autoplay = FALSE,controls = FALSE),
-#  tags$audio(id = "audio_level_hard",src = "https://drive.google.com/uc?export=view&id=1mxtdHwigeQ-OMzHONNditX2Zs_Q0mW-8&confirm=t",
-#    type = "audio/mp3",onerror = "console.log('Audio load error')",autoplay = FALSE,controls = FALSE)
-
 )
 
 server <- function(input, output, session) {
@@ -35,43 +25,14 @@ server <- function(input, output, session) {
   game_data <- reactiveValues(grid = NULL, solution = NULL, observed = FALSE,
                               start_time = NULL, timer_active = FALSE, final_time = "00:00")
 
-#  stop_all_music <- function() {
-#    shinyjs::runjs('
-#      var audios = document.querySelectorAll("audio");
-#      audios.forEach(function(audio) {
-#        audio.pause();
-#        audio.currentTime = 0;
-#    });
-#  ')
-#  }
-
-#  play_audio <- function(audio_id) {
-#    shinyjs::runjs(sprintf('
-#    var audios = document.querySelectorAll("audio");
-#    audios.forEach(function(audio) {
-#      audio.pause();
-#      audio.currentTime = 0;
-#    });
-
-#    var targetAudio = document.getElementById("%s");
-#    if (targetAudio) {
-#      targetAudio.currentTime = 0;
-#      targetAudio.play();
-#    }
-#  ', audio_id))
-#  }
 
   # Welcome UI
   output$welcome_ui <- renderUI({
     tagList(
-      tags$img(
-        src = "https://raw.githubusercontent.com/KatyaStetsun/TakuzuKL/main/inst/takuzu_app/www/title_1.png",
-        loading = "lazy",
-        alt = "welcome image",
-        onerror = "this.parentElement.innerHTML='<p>Image not loaded</p>'",
-        class = "title-img"
-      ),
+      # Add a centered .png title:
+      tags$img(src = "https://raw.githubusercontent.com/KatyaStetsun/TakuzuKL/main/inst/takuzu_app/www/title_1.png", class = "title-img"),
       div(class = "btn-container",
+          # Add three action buttons for navigation:
           actionButton("play", "PLAY", class = "btn btn-custom"),
           actionButton("how_to_play", "HOW TO PLAY?", class = "btn btn-custom"),
           actionButton("exit", "EXIT", class = "btn btn-custom")
@@ -79,17 +40,12 @@ server <- function(input, output, session) {
     )
   })
 
-
   # Rules UI
   output$rules_ui <- renderUI({
     tagList(
       div(class = "rules-container",
           # Add a centered .png rules:
-          tags$img(src = "https://drive.google.com/uc?export=view&id=1_17mtgmaWlCA2-7nYFWFxKDTUAuy1FX5&confirm=t",
-              loading = "lazy",
-              alt = " rules image",
-              onerror = "this.parentElement.innerHTML='<p>Image not loaded</p>'",
-              class = "rules-img"),
+          tags$img(src = "https://raw.githubusercontent.com/KatyaStetsun/TakuzuKL/main/inst/takuzu_app/www/rules.png", class = "rules-img"),
           # Add an action button for navigation:
           actionButton("return_from_rules", "RETURN", class = "btn btn-custom rules-button")
       )
@@ -102,11 +58,11 @@ server <- function(input, output, session) {
       # Show a panel with two radio buttons to choose board size and difficulty level:
       div(class = "panel-custom",
           radioButtons("board_size", "Choose Board Size:",
-                       choices = c("4x4", "6x6", "8x8"),
-                       selected = "6x6"),
+                       choices = c("4x4"),
+                       selected = "4x4"),
           radioButtons("difficulty", "Choose Difficulty Level:",
                        choices = c("Easy", "Medium", "Hard"),
-                       selected = "Medium")          # 6x6 - Medium is the pre-selected settings
+                       selected = "Medium")
       ),
       # Add two action button below for navigation:
       div(class = "button-container",
@@ -144,16 +100,11 @@ server <- function(input, output, session) {
       div(class = "game-container",
           # Add a centered .png container with a distinct color depending on difficulty:
           div(class = "difficulty-img-container",
-              tags$img(
-                src = switch(input$difficulty,
-                             "Easy" = "https://drive.google.com/uc?export=view&id=1zTuGOFYPf5VpJv1gBY3vBtbxWkuSV7We&confirm=t",
-                             "Medium" = "https://drive.google.com/uc?export=view&id=1yCIv9t6-LEHR3CO34SFqgt1Ggiqu8gN1&confirm=t",
-                             "Hard" = "https://drive.google.com/uc?export=view&id=1mEWuM8cExbcL8F-EEcTxc3uANga_cnLG&confirm=t"
-                ),class = "difficulty-img",
-                loading = "lazy",
-                alt = paste("Difficulty level:", input$difficulty),
-                onerror = "this.onerror=null; this.style.display='none'; this.insertAdjacentHTML('afterend', '<div class=\"error-msg\">Image failed to load</div>')"
-              )
+              tags$img(src = switch(input$difficulty,
+                               "Easy" = "https://raw.githubusercontent.com/KatyaStetsun/TakuzuKL/main/inst/takuzu_app/www/easy_mode.png",
+                               "Medium" = "https://raw.githubusercontent.com/KatyaStetsun/TakuzuKL/main/inst/takuzu_app/www/medium_mode.png",
+                               "Hard" = "https://raw.githubusercontent.com/KatyaStetsun/TakuzuKL/main/inst/takuzu_app/www/hard_mode.png"),
+                  class = "difficulty-img")
           ),
           div(class = "game-grid",
               do.call(tagList, lapply(1:n, function(i) {
@@ -179,16 +130,9 @@ server <- function(input, output, session) {
 
           div(class = "game-controls-container",
               div(class = "game-timer", textOutput("game_timer")),
-              actionButton(
-                "toggle_music",
-                tags$img(
-                  src = "https://drive.google.com/uc?export=view&id=1MQjeGpViaKGGnxKyypcP_Q9JQhNtkthj&confirm=t",
-                  height = "20px",
-                  width = "20px",
-                  alt = "Toggle music",
-                  onerror = "this.parentElement.innerHTML='<p>Image not loaded</p>'",
-                  loading = "lazy"
-                ),class = "btn btn-custom"),
+              actionButton("toggle_music",
+                           tags$img(src = "https://raw.githubusercontent.com/KatyaStetsun/TakuzuKL/main/inst/takuzu_app/www/volume-up.png", height = "20px", width = "20px"),
+                           class = "btn btn-custom"),
               actionButton("check_solution", "CHECK", class = "btn btn-custom"),
               actionButton("solve_grid", "SOLVE", class = "btn btn-custom"),
               actionButton("return_to_menu", "QUIT", class = "btn btn-custom")
@@ -224,12 +168,6 @@ server <- function(input, output, session) {
     shinyjs::hide("choose_ui")
     shinyjs::show("game_ui")
 
-    # Start music when the game starts:
-#    audio_id <- switch(input$difficulty,
-#                       "Easy" = "audio_level_easy",
-#                       "Medium" = "audio_level_medium",
-#                       "Hard" = "audio_level_hard")
-#    play_audio(audio_id)
   })
 
   # Handle Playable Cells
@@ -286,8 +224,6 @@ server <- function(input, output, session) {
       )
       game_data$timer_active <- FALSE
 
-      play_audio("audio_victory")
-
       shinyjs::hide("game_ui")
       shinyjs::show("victory_ui")
     } else {
@@ -318,27 +254,6 @@ server <- function(input, output, session) {
   })
 
 
-  # Checking music
-#  observeEvent(input$toggle_music, {
-#    current_audio <- if (!is.null(game_data$grid)) {
-#      switch(input$difficulty,
-#             "Easy" = "audio_level_easy",
-#             "Medium" = "audio_level_medium",
-#             "Hard" = "audio_level_hard")
-#    } else {
-#      "audio_menu"
-#    }
-
-#    shinyjs::runjs(sprintf('
-#      var audio = document.getElementById("%s");
-#      if (audio.paused) {
-#        audio.play();
-#      } else {
-#        audio.pause();
-#      }
-#    ', current_audio))
-#  })
-
 
   # Victory UI
   output$victory_ui <- renderUI({
@@ -346,19 +261,12 @@ server <- function(input, output, session) {
     tagList(
       div(class = "rules-container",
           # Add a centered .png victory:
-          tags$img(
-            src = "https://drive.google.com/uc?export=view&id=1382rHVPlgXdk6SF8OHiPjPZ-6Tw1tkmM&confirm=t",
-            class = "rules-img",
-            alt = "Victory",               # Для доступности
-            loading = "lazy",             # Оптимизация загрузки
-            onerror = "this.parentElement.innerHTML='<p>Image not loaded</p>'",
-            style = "max-width: 100%;"    # Адаптивность
-          ),
+          tags$img(src = "https://raw.githubusercontent.com/KatyaStetsun/TakuzuKL/main/inst/takuzu_app/www/victory.png", class = "rules-img"),
           div(
             HTML(paste0(
               # Add a message with the recorded timer:
               "Congratulations!<br>",
-              "You solved the puzzle in ", game_data$final_time, "!<br><br>")),
+              "You solved the puzzle in", game_data$final_time, "!<br><br>")),
             class = "victory-message"
           ),
           # Add an action button for navigation:
@@ -375,7 +283,6 @@ server <- function(input, output, session) {
 
 
   observeEvent(input$play, {
-#    play_audio("audio_menu")
     shinyjs::hide("welcome_ui")
     shinyjs::show("choose_ui")
   })
@@ -387,7 +294,6 @@ server <- function(input, output, session) {
 
 
   observeEvent(input$return, {
-#    play_audio("audio_menu")
     shinyjs::hide("choose_ui")
     shinyjs::show("welcome_ui")
   })
@@ -400,7 +306,6 @@ server <- function(input, output, session) {
 
 
   observeEvent(input$return_to_menu_victory, {
-#    play_audio("audio_menu")
     shinyjs::hide("victory_ui")
     shinyjs::show("choose_ui")
     game_data$timer_active <- FALSE
@@ -408,7 +313,6 @@ server <- function(input, output, session) {
 
 
   observeEvent(input$return_to_menu, {
-#    play_audio("audio_menu")
     shinyjs::hide("game_ui")
     shinyjs::show("choose_ui")
     game_data$timer_active <- FALSE
@@ -416,7 +320,6 @@ server <- function(input, output, session) {
 
 
   observeEvent(input$return_to_menu_modal, {
-#    play_audio("audio_menu")
     removeModal()
 
     shinyjs::hide("game_ui")
@@ -424,18 +327,11 @@ server <- function(input, output, session) {
   })
 
 
-#  observe({
-#    if (is.null(input$play) || input$play == 0) {
-#      play_audio("audio_menu")
-#    }
-#  })
-
   # Exit game:
   observeEvent(input$exit, {
     stopApp()
   })
 }
-
 
 
 shinyApp(ui, server)
